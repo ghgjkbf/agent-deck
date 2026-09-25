@@ -79,11 +79,33 @@ body.float{width:400px;height:500px}
   <button data-tab="tasks" class="active">任务看板</button>
   <button data-tab="msgs">实时消息</button>
   <button data-tab="agents">成员状态</button>
+  <button data-tab="factory">智能体工厂</button>
 </nav>
 <main>
   <section class="tab active" id="tab-tasks"><div class="empty">暂无任务</div></section>
   <section class="tab" id="tab-msgs"><div class="empty">暂无消息</div></section>
   <section class="tab" id="tab-agents"><div class="empty">暂无成员</div></section>
+  <section class="tab" id="tab-factory">
+    <div class="card">
+      <div class="goal">把房间里的执行者组合成一个 EvoFlow 智能体（领导）</div>
+      <div style="margin-bottom:6px;color:var(--dim)">① 勾选外部执行者（按技能组合）：</div>
+      <div id="fac-members" style="margin-bottom:8px"><span class="empty">加载中…</span></div>
+      <div style="margin-bottom:6px;color:var(--dim)">② 填智能体信息：</div>
+      <input id="fac-name" placeholder="智能体名称，如 竞品调研队长" style="width:100%;margin-bottom:4px">
+      <input id="fac-code" placeholder="agent_code（英文，如 deck-lead-1）" style="width:100%;margin-bottom:4px">
+      <input id="fac-goal" placeholder="使命一句话，如 指挥团队完成竞品调研与报告" style="width:100%;margin-bottom:8px">
+      <button class="mode-btn" id="btn-draft" style="width:100%;padding:6px">③ 生成提示词草稿</button>
+      <div id="fac-preview" style="display:none;margin-top:8px">
+        <div style="color:var(--dim);margin-bottom:4px">④ 预览 system_prompt（可改后再创建）：</div>
+        <textarea id="fac-prompt" style="width:100%;height:180px;background:var(--panel2);
+          border:1px solid var(--border);color:var(--text);font-family:var(--font);
+          font-size:10px;padding:6px;border-radius:3px"></textarea>
+        <button class="mode-btn" id="btn-create" style="width:100%;padding:6px;margin-top:6px;
+          color:var(--green);border-color:var(--green)">⑤ 创建到 EvoFlow</button>
+      </div>
+      <div id="fac-result" style="margin-top:8px"></div>
+    </div>
+  </section>
 </main>
 <footer>
   <input id="inp-goal" placeholder="下达目标（经领导 Agent 拆解）" maxlength="200">
@@ -213,9 +235,62 @@ body.float{width:400px;height:500px}
   };
   $('#inp-goal').addEventListener('keydown',e=>{if(e.key==='Enter')$('#btn-goal').click();});
 
-  refreshTasks(); refreshMsgs();
+  // ---------- 智能体工厂 ----------
+  let facPick = new Set();
+  async function refreshFactory(){
+    try{
+      const r = await fetch('/api/factory/members?room_id=default');
+      const d = await r.json();
+      const el = $('#fac-members');
+      if(!d.ok || !d.members.length){ el.innerHTML='<span class="empty">房间暂无执行者</span>'; return; }
+      el.innerHTML = d.members.map(m=>`
+        <label style="display:flex;align-items:center;gap:6px;padding:3px 0;cursor:pointer">
+          <input type="checkbox" data-aid="${m.agent_id}" ${facPick.has(m.agent_id)?'checked':''}>
+          <span>${esc(m.name)}</span>
+          <span style="color:var(--teal);font-size:10px">${esc(m.skills.join(' / '))||'通用'}</span>
+          <span class="dot ${m.status}" style="margin-left:auto"></span>
+        </label>`).join('');
+      el.querySelectorAll('input[type=checkbox]').forEach(cb=>{
+        cb.onchange=()=>{
+          const aid=cb.dataset.aid;
+          cb.checked ? facPick.add(aid) : facPick.delete(aid);
+        };
+      });
+    }catch(e){}
+  }
+  $('#btn-draft').onclick=async()=>{
+    const name=$('#fac-name').value.trim(), code=$('#fac-code').value.trim().replace(/\s+/g,'-').toLowerCase(),
+          goal=$('#fac-goal').value.trim();
+    if(!name||!code||!goal){ alert('名称 / agent_code / 使命 都要填'); return; }
+    if(!facPick.size){ alert('至少勾选一名执行者'); return; }
+    const r = await fetch('/api/factory/draft-agent',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({agent_code:code,agent_name:name,goal,
+        selected_members:[...facPick],room_id:ROOM})});
+    const d = await r.json();
+    if(!d.ok){ alert(d.detail||'生成失败'); return; }
+    $('#fac-prompt').value = d.draft.system_prompt;
+    $('#fac-preview').style.display='block';
+    $('#fac-result').innerHTML='';
+  };
+  $('#btn-create').onclick=async()=>{
+    const name=$('#fac-name').value.trim(), code=$('#fac-code').value.trim().replace(/\s+/g,'-').toLowerCase(),
+          goal=$('#fac-goal').value.trim();
+    const r = await fetch('/api/factory/create-agent',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({agent_code:code,agent_name:name,goal,
+        selected_members:[...facPick],room_id:ROOM})});
+    const d = await r.json();
+    const el = $('#fac-result');
+    if(!d.ok){ el.innerHTML=`<div style="color:var(--red)">创建失败：${esc(d.detail||'未知错误')}</div>`; return; }
+    el.innerHTML=`<div style="color:var(--green)">✓ 已创建到 EvoFlow：${esc(d.draft.agent_name)}
+      （${esc(d.draft.agent_code)}），已勾选 agent-deck MCP。到 EvoFlow 里新建对话即可指挥团队。</div>`;
+  };
+
+  refreshTasks(); refreshMsgs(); refreshFactory();
   setInterval(refreshTasks,3000);
   setInterval(refreshMsgs,2000);
+  setInterval(refreshFactory,15000);
 })();
 </script>
 </body>

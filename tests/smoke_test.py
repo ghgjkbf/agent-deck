@@ -61,7 +61,9 @@ def main():
     expect(mcp_call("join_room", {"agent_id": L["agent_id"], "token": "bad"})["ok"] is False, "错误令牌被拒")
 
     r = mcp_call("list_members", {}, H1)
-    expect(r["ok"] and len(r["members"]) == 3, "list_members 成员名册")
+    names = {m["name"] for m in r["members"]}
+    expect(r["ok"] and {"zcode-leader", "codex-exec", "hermes-exec"} <= names,
+           "list_members 成员名册（含本次注册 3 员）")
     expect(any("爬虫" in m["skills"] for m in r["members"]), "名册含技能标签")
     r = mcp_call("list_members", {}, H2)
     expect(r["ok"] is False, "executor 越权 list_members 被拒")

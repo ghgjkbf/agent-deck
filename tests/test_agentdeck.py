@@ -236,3 +236,19 @@ def test_list_members_shows_skills():
                            (a["agent_id"],)).fetchone()
     import json
     assert json.loads(row["skills"]) == ["写作", "调研"]
+
+
+def test_factory_draft_prompt():
+    """智能体工厂：勾选成员的技能与 AgentDeck 工具流进入提示词。"""
+    from server.main import _draft_prompt
+    members = [{"agent_id": "agt_1", "name": "codex", "status": "online",
+                "skills": ["python", "爬虫"]},
+               {"agent_id": "agt_2", "name": "writer", "status": "offline",
+                "skills": []}]
+    sp, soul = _draft_prompt("竞品调研", members)
+    assert "#角色" in sp and "#团队外部执行者" in sp and "#工作流程" in sp
+    assert "codex" in sp and "爬虫" in sp
+    assert "writer" in sp and "通用" in sp          # 无技能标注为通用
+    assert "plan_draft" in sp and "review_deliverable" in sp
+    assert "handle_escalated" in sp and "abort_task" in sp
+    assert "竞品调研" in soul and "领导" in soul

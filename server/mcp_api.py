@@ -259,6 +259,20 @@ def build_mcp_server() -> MCPServer:
             return _err(e)
 
     @srv.tool()
+    async def abort_task(task_id: str, agent_id: str = None,
+                         token: str = None, ctx: Context = None) -> str:
+        """作废任务：未完成子任务全部释放，房间可开新任务。仅 leader。"""
+        try:
+            agent_id, token = _auth_from_args_or_headers(agent_id, token, ctx)
+            agent = authenticate_role(agent_id, token, "leader")
+            touch(agent_id)
+            orch = OrchestratorRegistry.get(agent["room_id"])
+            return json.dumps(await orch.abort_task(task_id),
+                              ensure_ascii=False)
+        except Exception as e:
+            return _err(e)
+
+    @srv.tool()
     async def review_deliverable(subtask_id: str, accept: bool, reason: str,
                                  agent_id: str = None, token: str = None,
                                  ctx: Context = None) -> str:
