@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AgentDeck</title>
+<style>
+:root{
+  --bg:#12141a;--panel:#1a1d26;--panel2:#20242f;--border:#2c3140;
+  --text:#d8dce6;--dim:#7a8194;--amber:#e8a33d;--teal:#3ecfb2;
+  --red:#e05c5c;--green:#4fc47a;--font:ui-monospace,'Cascadia Mono',Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:12px;
+  height:100vh;display:flex;flex-direction:column;overflow:hidden}
+header{padding:8px 12px;border-bottom:1px solid var(--border);display:flex;
+  align-items:center;justify-content:space-between;flex-shrink:0}
+header h1{font-size:13px;color:var(--amber);letter-spacing:1px}
+.mode-btn{background:none;border:1px solid var(--border);color:var(--dim);
+  font-family:var(--font);font-size:10px;padding:2px 8px;cursor:pointer;border-radius:3px}
+.mode-btn:hover{color:var(--teal);border-color:var(--teal)}
+nav{display:flex;flex-shrink:0;border-bottom:1px solid var(--border)}
+nav button{flex:1;background:none;border:none;color:var(--dim);font-family:var(--font);
+  font-size:11px;padding:8px 4px;cursor:pointer;border-bottom:2px solid transparent}
+nav button.active{color:var(--teal);border-bottom-color:var(--teal)}
+main{flex:1;overflow-y:auto;padding:8px}
+section.tab{display:none}
+section.tab.active{display:block}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:4px;
+  padding:8px;margin-bottom:6px}
+.goal{color:var(--amber);font-size:12px;margin-bottom:6px;word-break:break-all}
+.task-status{display:inline-block;font-size:10px;padding:1px 6px;border-radius:3px;
+  border:1px solid var(--border);color:var(--dim)}
+.task-status.running{color:var(--teal);border-color:var(--teal)}
+.task-status.done{color:var(--green);border-color:var(--green)}
+.task-status.aborted{color:var(--red);border-color:var(--red)}
+.sub{display:flex;align-items:center;gap:6px;padding:5px 0;border-top:1px dashed var(--border)}
+.sub:first-of-type{border-top:none}
+.sub .st{font-size:10px;min-width:52px;text-align:center;border-radius:3px;padding:1px 4px}
+.st.pending{background:#2a3040;color:var(--dim)}
+.st.claimed{background:#0e3a4a;color:var(--teal)}
+.st.submitted{background:#3d3413;color:var(--amber)}
+.st.verified{background:#12351f;color:var(--green)}
+.st.rejected{background:#3d1515;color:var(--red)}
+.st.released,.st.escalated{background:#3a2a10;color:var(--amber)}
+.sub .who{margin-left:auto;color:var(--dim);font-size:10px}
+.sub .retry{color:var(--red);font-size:10px}
+.msg{padding:4px 0;border-bottom:1px dashed var(--border);line-height:1.5}
+.msg .meta{color:var(--dim);font-size:10px}
+.msg .meta .tp{color:var(--teal)}
+.msg.p0{color:var(--red);font-weight:bold}
+.agent{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px dashed var(--border)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--dim);flex-shrink:0}
+.dot.online{background:var(--green)}
+.dot.busy{background:var(--amber)}
+.role{font-size:10px;padding:0 5px;border-radius:3px;border:1px solid var(--border)}
+.role.leader{color:var(--amber);border-color:var(--amber)}
+.role.executor{color:var(--teal);border-color:var(--teal)}
+.agent .cur{margin-left:auto;color:var(--dim);font-size:10px;max-width:45%;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+footer{flex-shrink:0;padding:8px;border-top:1px solid var(--border);display:flex;gap:6px}
+footer input{flex:1;background:var(--panel2);border:1px solid var(--border);color:var(--text);
+  font-family:var(--font);font-size:11px;padding:6px 8px;border-radius:3px;min-width:0}
+footer button{background:var(--panel2);border:1px solid var(--border);color:var(--text);
+  font-family:var(--font);font-size:11px;padding:6px 10px;border-radius:3px;cursor:pointer}
+footer #btn-goal{color:var(--amber);border-color:var(--amber)}
+footer #btn-p0{color:var(--red);border-color:var(--red)}
+footer button:disabled{opacity:.4;cursor:not-allowed}
+.empty{color:var(--dim);text-align:center;padding:24px 0}
+body.float{width:400px;height:500px}
+</style>
+</head>
+<body>
+<header>
+  <h1>AGENTDECK</h1>
+  <button class="mode-btn" id="btn-mode" title="切换悬浮窗/侧边栏">FLOAT</button>
+</header>
+<nav>
+  <button data-tab="tasks" class="active">任务看板</button>
+  <button data-tab="msgs">实时消息</button>
+  <button data-tab="agents">成员状态</button>
+</nav>
+<main>
+  <section class="tab active" id="tab-tasks"><div class="empty">暂无任务</div></section>
+  <section class="tab" id="tab-msgs"><div class="empty">暂无消息</div></section>
+  <section class="tab" id="tab-agents"><div class="empty">暂无成员</div></section>
+</main>
+<footer>
+  <input id="inp-goal" placeholder="下达目标（经领导 Agent 拆解）" maxlength="200">
+  <button id="btn-goal" title="将目标发到房间，由领导 Agent 领取拆解">下达</button>
+  <button id="btn-p0" title="全局紧急打断">P0</button>
+</footer>
+<script>
+(function(){
+  const $=s=>document.querySelector(s), ROOM='default';
+  let evCursor=0, mode='side';
+
+  // Tab 切换
+  document.querySelectorAll('nav button').forEach(b=>{
+    b.onclick=()=>{
+      document.querySelectorAll('nav button,section.tab').forEach(x=>x.classList.remove('active'));
+      b.classList.add('active');
+      $('#tab-'+b.dataset.tab).classList.add('active');
+    };
+  });
+  // 悬浮窗模式
+  $('#btn-mode').onclick=()=>{
+    mode = mode==='side' ? 'float':'side';
+    document.body.classList.toggle('float', mode==='float');
+    $('#btn-mode').textContent = mode==='float' ? 'SIDE' : 'FLOAT';
+  };
+
+  const esc=s=>(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const ST={pending:'待领',claimed:'进行中',submitted:'已交付',verified:'已验收',
+            rejected:'已打回',released:'已释放',escalated:'已升级'};
+  const TS={awaiting_confirm:'待确认',running:'执行中',done:'已完成',aborted:'已作废'};
+
+  async function refreshTasks(){
+    try{
+      const r=await fetch(`/api/state?room_id=${ROOM}`); const d=await r.json();
+      if(!d.ok) return;
+      const el=$('#tab-tasks');
+      if(!d.tasks.length){el.innerHTML='<div class="empty">暂无任务</div>';}
+      else el.innerHTML=d.tasks.map(t=>`
+        <div class="card">
+          <div class="goal">${esc(t.goal)}</div>
+          <span class="task-status ${t.status}">${TS[t.status]||t.status}</span>
+          ${t.status==='awaiting_confirm'
+            ?`<button class="mode-btn" onclick="confirmTask('${t.task_id}')">确认派发</button>`
+            :''}
+          ${t.status!=='done'&&t.status!=='aborted'
+            ?`<button class="mode-btn" onclick="abortTask('${t.task_id}')">作废</button>`:''}
+          <div style="margin-top:6px">
+          ${(t.subtasks||[]).map(s=>`
+            <div class="sub">
+              <span class="st ${s.status}">${ST[s.status]||s.status}</span>
+              <span>#${s.seq} ${esc(s.title)}</span>
+              ${s.retry_count?`<span class="retry">×${s.retry_count}</span>`:''}
+              ${s.escalated?'<span class="retry">⚠升级</span>':''}
+              ${s.assignee?`<span class="role executor">定向</span>`:''}
+              <span class="who">${esc(s.claimant_id||s.assignee||'')}</span>
+            </div>`).join('')}
+          </div>
+          ${(t.progress&&t.progress.length)?`
+          <div style="margin-top:6px;border-top:1px dashed var(--border);padding-top:4px">
+            ${t.progress.slice(0,3).map(p=>`
+              <div style="color:var(--dim);font-size:10px;line-height:1.6">
+                ▸ ${esc(p.text)} <span style="opacity:.6">${p.created_at.slice(11,16)}</span>
+              </div>`).join('')}
+          </div>`:''}
+        </div>`).join('');
+      // 成员
+      const ag=$('#tab-agents');
+      if(!d.agents.length){ag.innerHTML='<div class="empty">暂无成员</div>';}
+      else ag.innerHTML=d.agents.map(a=>{
+        const skills=JSON.parse(a.skills||'[]');
+        return `<div class="agent">
+          <span class="dot ${a.status}"></span>
+          <span>${esc(a.name)}</span>
+          <span class="role ${a.role}">${a.role==='leader'?'领导':'执行'}</span>
+          <span class="cur">${esc(skills.join(' / '))}</span>
+        </div>`;}).join('');
+    }catch(e){}
+  }
+  window.confirmTask=async id=>{
+    await fetch(`/api/tasks/${id}/confirm`,{method:'POST',
+      headers:{'Content-Type':'application/json'},body:'{"room_id":"default"}'});
+    refreshTasks();
+  };
+  window.abortTask=async id=>{
+    await fetch(`/api/tasks/${id}/abort`,{method:'POST',
+      headers:{'Content-Type':'application/json'},body:'{"room_id":"default"}'});
+    refreshTasks();
+  };
+
+  const MAX_MSG=20;
+  async function refreshMsgs(){
+    try{
+      const r=await fetch(`/api/events?room_id=${ROOM}&cursor=${evCursor}`);
+      const d=await r.json(); if(!d.ok||!d.messages.length) return;
+      evCursor=d.next_cursor;
+      const el=$('#tab-msgs');
+      const empty=el.querySelector('.empty'); if(empty) empty.remove();
+      const frag=d.messages.map(m=>{
+        const t=m.type==='dispatch'?'派发':m.type==='deliver'?'交付':
+                m.type==='receipt'?'验收':m.type==='interrupt'?'P0':
+                m.type==='task'?'任务':'消息';
+        return `<div class="msg ${m.priority===0?'p0':''}">
+          <div class="meta">#${m.seq} <span class="tp">[${t}]</span>
+            ${esc(m.sender.id)} · ${m.created_at.slice(11,19)}</div>
+          <div>${esc(m.text)}</div></div>`;
+      }).join('');
+      el.insertAdjacentHTML('afterbegin',frag);
+      // 只留最近 20 条
+      const msgs=el.querySelectorAll('.msg');
+      for(let i=MAX_MSG;i<msgs.length;i++) msgs[i].remove();
+    }catch(e){}
+  }
+
+  $('#btn-goal').onclick=async()=>{
+    const inp=$('#inp-goal'); const text=inp.value.trim(); if(!text) return;
+    inp.value='';
+    // 目标落房间消息流，领导 Agent poll 到后按群规 plan_draft
+    await fetch('/api/goal',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({room_id:ROOM,text})});
+  };
+  $('#btn-p0').onclick=async()=>{
+    if(!confirm('确认发送 P0 全局打断？')) return;
+    await fetch('/api/p0',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({room_id:ROOM,text:'P0：人类紧急打断，立即停止当前动作。'})});
+  };
+  $('#inp-goal').addEventListener('keydown',e=>{if(e.key==='Enter')$('#btn-goal').click();});
+
+  refreshTasks(); refreshMsgs();
+  setInterval(refreshTasks,3000);
+  setInterval(refreshMsgs,2000);
+})();
+</script>
+</body>
+</html>

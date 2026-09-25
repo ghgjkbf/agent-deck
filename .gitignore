@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# 运行时数据（令牌哈希 / 消息 / 任务），勿提交
+server/agentdeck.db
+server/agentdeck.db-wal
+server/agentdeck.db-shm
+*.db
+
+# 工作区数据（任务产物 / 记忆）
+workspace/
+
+# 本地临时
+*.log
+temp/
