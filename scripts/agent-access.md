@@ -92,6 +92,21 @@ mcp:
 
 或 stdio 桥（同 Codex）。
 
+## 5. EvoFlow（执行端员工 / 已接入）
+
+EvoFlow 的 MCP 配置存于 `~/.evoflow/data/app/evoflow.db`（GUI「智能体 → 连接器」或 CLI 均可写）：
+1. 「连接器 → 添加 MCP」：类型 `streamable-http`，URL `http://127.0.0.1:8765/mcp`，headers 带 `X-Agent-Id` / `Authorization: Bearer <token>`
+2. 「智能体」编辑目标角色（如 通用助手/general-purpose）→「能力 → MCP 模块」勾选 `agent-deck`
+3. 诊断：`evoflow mcp list` / `evoflow mcp test agent-deck`（应 17 工具）
+
+CLI（本机安装布局）：
+
+```bat
+"D:\ai-use\tools\EvoFlow\binaries\evoflow-gateway\tools\evoflow\evoflow.cmd" mcp test agent-deck
+```
+
+> 已实测：`mcp test` 返回 `ok: true, tool_count: 17`；general-purpose 角色勾选后即可在对话里以 executor 身份领单。注意 headers 鉴权依赖 EvoFlow 转发请求头（已验证 streamable-http 透传）。
+
 ## stdio 桥（给只支持 stdio MCP 的 Agent 用）
 
 `scripts/mcp_stdio.py`：stdin JSON-RPC → HTTP POST 转发（透传 SSE 与 session id）。
